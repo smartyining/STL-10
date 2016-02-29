@@ -1,5 +1,5 @@
 
--- require 'cunn'
+require 'cunn'
 require 'unsup'
 require 'image'
 require 'optim'
@@ -45,7 +45,7 @@ cmd:option('-kernelsize', 3, 'size of convolutional kernels')
 cmd:option('-datafile', 'extradata.t7', 'Dataset position: small.t7 | extradata.t7')
 cmd:option('-statinterval', 1000, 'interval for saving stats and models')
 cmd:option('-v', false, 'be verbose')
-cmd:option('-display', true, 'display stuff')
+cmd:option('-display', false, 'display stuff')
 cmd:option('-wcar', '', 'additional flag to differentiate this run')
 cmd:text()
 
@@ -170,22 +170,22 @@ elseif params.model == 'conv' then
    encoder:add(nn.ReLU())
    encoder:add(nn.SpatialMaxPooling(4,4,4,4))  --64  // feature map size : 64 *3 * 23 *23
    -- encoder:add(nn.SpatialBatchNormalization(params.nfiltersout,nil,nil,false)) 
-
+MSRinit(encoder)
    -- decoder is L1 solution:
    decoder = nn.Sequential()
    decoder:add(nn.SpatialMaxUnpooling(encoder:get(3)))  -- 64*3*92*92
    decoder:add(nn.SpatialFullConvolutionMap(decodertable, kw, kh, 1, 1))
 
    -- PSD autoencoder
-   module = unsup.AutoEncoder(encoder, decoder, params.lambda)
-   MSRinit(encoder)
+   module = unsup.AutoEncoder(encoder, decoder, params.lambda):cuda()
+   
 
    -- weight initilization  -192*5*5
    -- weightInit(module.encoder.modules[1].weight)
 
 
    -- convert dataset to convolutional (returns 1xKxK tensors (3D), instead of K*K (1D))
-   dataset:conv()
+   dataset:conv():cuda()
 
    -- verbose
    print('==> constructed convolutional  auto-encoder')
