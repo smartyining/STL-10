@@ -89,7 +89,7 @@ do
     if self.train then
 
       local patchsize = input:size(3)
-      local factor = torch.rand(1)[1] * 0.7 + 0.7
+      local factor = torch.rand(1)[1] * 0.4 + 1
       local img_size = math.floor(patchsize * factor)
       local bs = input:size(1)
       local flip_mask = torch.randperm(bs):le(bs/2)
@@ -162,49 +162,5 @@ end
 
 
 ------------------------------------------
-
-do
-  local BatchContrast2,parent = torch.class('nn.BatchContrast2', 'nn.Module')
-
-  function BatchContrast2:__init()
-    parent.__init(self)
-    self.train = true
-  end
-
-function BatchContrast2:updateOutput(input)
-    if self.train then
-      local bs = input:size(1)
-      local patchsize = input:size(3)
-      local flip_mask = torch.randperm(bs):le(bs/2)
-      for i=1,input:size(1) do
-        if flip_mask[i] == 1 then 
-            local powfac = torch.rand(1)[1] * 3.75 + 0.25
-            local mulfac = torch.rand(1)[1] * 0.7 + 0.7
-            local addval = torch.rand(1)[1] * 0.2 - 0.1
-            input[i] = image.rgb2hsv(input[i])
-            input[i][{{2,3}, {}, {}}]:pow(powfac):mul(mulfac):add(addval)
-            for it = 2, 3 do
-               local max = input[i][it]:max()
-               local min = input[i][it]:min()
-               if min < 0 then
-                  input[i][it]:add(-min)
-               end
-               if max > 1 then
-                  input[i][it]:div(max)
-               end
-            end
-
-         end
-      end
-    end
-    self.output:set(input)
-    return self.output
- end
-end
-
-
-
-
-
 
 
