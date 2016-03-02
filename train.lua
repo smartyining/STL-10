@@ -25,11 +25,10 @@ model = nn.Sequential()
 local function augment()
   model:add(nn.BatchHFlip():float())
   model:add(nn.BatchTranslate():float())
-  --model:add(nn.BatchScale():float())
-  --model:add(nn.BatchRotate():float())   -has some problem
+  model:add(nn.BatchScale():float())
+  model:add(nn.BatchRotate():float())   
   model:add(nn.BatchContrast1():float())
-  --model:add(nn.BatchContrast2():float())
-   model:add(nn.BatchVFlip():float())
+  model:add(nn.BatchVFlip():float())
   return model
 end
 
@@ -38,24 +37,22 @@ print(c.blue '==>' ..' configuring model')
 augment()
 model:add(nn.Copy('torch.FloatTensor','torch.CudaTensor'):cuda())
 model:add(dofile('models/'..opt.model..'.lua'):cuda())
-model:get(6).updateGradInput = function(input) return end
+model:get(7).updateGradInput = function(input) return end
 
+collectgarbage()
 
 if opt.backend == 'cudnn' then
    require 'cudnn'
-   cudnn.convert(model:get(7), cudnn)
+   cudnn.convert(model:get(8), cudnn)
 end
 
 print(model)
 
 
 function weightInit()
-  -- local weightDir = 'eweight_1.t7'
-  -- print(torch.load(weightDir):size())
-  -- local weightVector = torch.load(weightDir):reshape(192,5,5)
   dir = 'model_1.bin'
   local module_pre = torch.load(dir)
-  local weightVector = module_pre.encoder.modules[1].weight:Cuda()
+  local weightVector = module_pre.encoder.modules[1].weight:cuda()
   return  weightVector
 end
 
@@ -82,7 +79,6 @@ function init(net)
       if v.nInputPlane==3 and v.nOutputPlane==64 then
         print('weight reinilized')
         v.weight= weightInit():clone()
-
       end
     end
   end
@@ -90,7 +86,7 @@ function init(net)
   init'nn.SpatialConvolution'
 end
 
-init(model)
+--init(model)
 
 print(c.blue'==>' ..' setting criterion')
 criterion = nn.CrossEntropyCriterion():cuda()
@@ -125,8 +121,21 @@ function train()
   for t,v in ipairs(indices) do
     xlua.progress(t, #indices)
 
-    local inputs = provider.trainData.data:index(1,v)
+    local inputs = provider.trainData.data:index(1,v) -- 64 images
     targets:copy(provider.trainData.labels:index(1,v))
+
+    -- add cotrast2  and color mod
+    local m1 = nn.Contrast2()
+    local m2 = nn.ColorMod()
+    for it=1, opt.batchSize do
+        local rand = torch.rand(1)
+        local rand2 = torch.rand(1)
+        if rand>0.5 then
+          inputs[it] = m1:forward(inputs[it])
+        end
+        if rand2>0.5 then
+          inputs[it]=m2:forward(inputs[it])
+    end
 
     local feval = function(x)
       if x ~= parameters then parameters:copy(x) end
@@ -136,8 +145,6 @@ function train()
       local f = criterion:forward(outputs, targets)
       local df_do = criterion:backward(outputs, targets)
       model:backward(inputs, df_do)
-      -- print(outputs:size())  64，10
-      -- print(targets:size())   64
 
       confusion:batchAdd(outputs, targets)
 
