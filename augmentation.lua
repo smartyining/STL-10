@@ -107,7 +107,7 @@ do
         end
       end
     end
-
+    collectgarbage()
      self.output:set(input)
     return self.output
   end
@@ -133,9 +133,15 @@ do
       local bs = input:size(1)
       local flip_mask = torch.randperm(bs):le(bs/2)
       for i=1,input:size(1) do
-        if flip_mask[i] == 1 then image.rotate(self.output[i],input[i],rad) end
+        if flip_mask[i] == 1 then 
+          local temp=torch.Tensor(input[i]):clone()
+          image.rotate(temp,input[i],rad)
+          input[i]=temp
+          end
       end
     end
+    collectgarbage()
+    self.output:set(input)
     return self.output
   end
 end
