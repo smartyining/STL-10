@@ -4,16 +4,18 @@ dofile './provider.lua'
 dofile 'augmentation.lua'
 require 'cunn'
 local c = require 'trepl.colorize'
+-- train.lua file for cpu calculation
+
 
 opt = lapp[[
    -s,--save                  (default "logs")      subdirectory to save logs
    -b,--batchSize             (default 64)          batch size
-   -r,--learningRate          (default 1)        learning rate
+   -r,--learningRate          (default 0.8)        learning rate
    --learningRateDecay        (default 1e-7)      learning rate decay
    --weightDecay              (default 0.0005)      weightDecay
    -m,--momentum              (default 0.9)         momentum
    --epoch_step               (default 25)          epoch step
-   --model                    (default vgg_bn_drop)     model name
+   --model                    (default sample)     model name
    --max_epoch                (default 300)           maximum number of iterations
    --backend                  (default nn)            backend
 ]]
@@ -24,11 +26,11 @@ model = nn.Sequential()
 -- data augmentation block
 local function augment()
   model:add(nn.BatchHFlip():float())
-  model:add(nn.BatchTranslate():float())
-  model:add(nn.BatchScale():float())
-  model:add(nn.BatchRotate():float())   
-  model:add(nn.BatchContrast1():float())
-  model:add(nn.BatchVFlip():float())
+  -- model:add(nn.BatchTranslate():float())
+  -- model:add(nn.BatchScale():float())
+  -- model:add(nn.BatchRotate():float())   
+  -- model:add(nn.BatchContrast1():float())
+  -- model:add(nn.BatchVFlip():float())
   return model
 end
 
@@ -37,7 +39,7 @@ print(c.blue '==>' ..' configuring model')
 augment()
 model:add(nn.Copy('torch.FloatTensor','torch.CudaTensor'):cuda())
 model:add(dofile('models/'..opt.model..'.lua'):cuda())
-model:get(7).updateGradInput = function(input) return end
+model:get(2).updateGradInput = function(input) return end
 
 collectgarbage()
 
@@ -50,12 +52,30 @@ print(model)
 
 
 function weightInit()
-  dir = 'model_1.bin'
-  local module_pre = torch.load(dir)
-  local weightVector = module_pre.encoder.modules[1].weight:cuda()
-  return  weightVector
+  local weight = torch.load('centroid')  -- has 128 kernals 128, 3*3*3
+  -- normalize weight
+  -- shuffle weight
+  index = torch.randperm(weight:size(1))
+  -- select 64 kernals
+  weightVector = torch.Tensor(64,3,3,3)
+  i=0
+  j=1
+  while j<128 do
+    local std =  weight[index[j]]:std()
+    j= j+1
+    if std>0.4 then
+      i =i+1
+      weightVector[i]=weight[index[j]]:reshape(3,3,3)
+    end
+    if i==64 then
+      print('weightInitied')
+      return  weightVector
+    end
+
+  end
 end
 
+collectgarbage()
 
 print(c.blue '==>' ..' loading data')
 provider = torch.load './provider.t7'
@@ -72,13 +92,12 @@ valLogger.showPlot = false
 
 parameters,gradParameters = model:getParameters()
 
-
 function init(net)
   local function init(name)
     for k,v in pairs(net:findModules(name)) do
-      if v.nInputPlane==3 and v.nOutputPlane==64 then
-        print('weight reinilized')
-        v.weight= weightInit():clone()
+      --print(v)
+      if v.nOutputPlane==64 then
+        v.weight= weightInit()
       end
     end
   end
@@ -86,7 +105,7 @@ function init(net)
   init'nn.SpatialConvolution'
 end
 
---init(model)
+init(model)  -- initilize weight with k means
 
 print(c.blue'==>' ..' setting criterion')
 criterion = nn.CrossEntropyCriterion():cuda()
@@ -124,18 +143,6 @@ function train()
     local inputs = provider.trainData.data:index(1,v) -- 64 images
     targets:copy(provider.trainData.labels:index(1,v))
 
-    -- add cotrast2  and color mod
-    local m1 = nn.Contrast2()
-    local m2 = nn.ColorMod()
-    for it=1, opt.batchSize do
-        local rand = torch.rand(1)
-        local rand2 = torch.rand(1)
-        if rand>0.5 then
-          inputs[it] = m1:forward(inputs[it])
-        end
-        if rand2>0.5 then
-          inputs[it]=m2:forward(inputs[it])
-    end
 
     local feval = function(x)
       if x ~= parameters then parameters:copy(x) end
@@ -220,7 +227,7 @@ function val()
   if epoch % 5 == 0 then
     local filename = paths.concat(opt.save, 'model.net')
     print('==> saving model to '..filename)
-    torch.save(filename, model:get(7))
+    torch.save(filename, model:get(3))
   end
 
   confusion:zero()
