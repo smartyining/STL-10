@@ -1,6 +1,8 @@
 require 'nn'
 require 'image'
 require 'xlua'
+require 'matio'
+dofile 'extradata.lua'
 
 torch.setdefaulttensortype('torch.FloatTensor')
 
@@ -25,7 +27,7 @@ end
 local Provider = torch.class 'Provider'
 
 function Provider:__init(full)
-  local trsize = 4000
+   trsize = 4000
   local valsize = 1000  -- Use the validation here as the valing set
   local channel = 3
   local height = 96
@@ -54,7 +56,7 @@ function Provider:__init(full)
   self.trainData = {
      data = torch.Tensor(),
      labels = torch.Tensor(),
-     size = function() return trsize end
+     size = function() return trsize  end
   }
   self.trainData.data, self.trainData.labels = parseDataLabel(raw_train.data,
                                                    trsize, channel, height, width)
@@ -75,6 +77,31 @@ function Provider:__init(full)
   self.valData.labels = self.valData.labels:float()
   collectgarbage()
 end
+
+function Provider:useExtra()
+
+  local extra = torch.load('labelIx.t7')  --index, label{} 
+  local nExtra = #extra.label
+  print('going to add ..'..nExtra..'data to traindata')
+  local extradata = torch.load('extradata_all.t7').trainData.data
+  -- select by index
+  -- c
+  local add = torch.Tensor(nExtra,3,96,96)
+  local ix=1
+  for i=1, extradata:size(1) do
+    if extra.index[i]==1 then
+      add[ix] = extradata[i]
+      ix =ix +1
+    end
+  end
+  local label =torch.Tensor(extra.label)
+  trsize = trsize+nExtra
+
+  self.trainData.data = torch.cat(self.trainData.data,add,1)
+  self.trainData.labels = torch.cat(self.trainData.labels,label,1)
+
+end
+
 
 function Provider:normalize()
   ----------------------------------------------------------------------
@@ -130,3 +157,5 @@ function Provider:normalize()
   valData.data:select(2,3):add(-mean_v)
   valData.data:select(2,3):div(std_v)
 end
+
+

@@ -13,7 +13,7 @@ function extradata:__init(full)
 	height = 96
 	width = 96
 
-	trsize = numSamples/10
+	trsize = numSamples
 
 	self.trainData = {
 	     data = torch.Tensor(trsize, numChannels, height, width),
@@ -23,7 +23,7 @@ function extradata:__init(full)
 	raw_table = torch.load(filename)
 	-- load raw data 
 	for i=1 , trsize do
-		self.trainData.data[i] :copy(raw_table.data[1][9*i]:float())
+		self.trainData.data[i] :copy(raw_table.data[1][i]:float())
 	end
 
 	self.trainData.data = self.trainData.data:float()
