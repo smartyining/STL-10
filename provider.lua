@@ -135,6 +135,11 @@ function Provider:normalize()
   trainData.data:select(2,3):add(-mean_v)
   trainData.data:select(2,3):div(std_v)
 
+  self.mean_u = mean_u
+  self.std_u =std_u
+  self.mean_v = mean_v
+  self.std_v = std_v
+
   trainData.mean_u = mean_u
   trainData.std_u = std_u
   trainData.mean_v = mean_v
